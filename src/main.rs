@@ -50,6 +50,10 @@ impl PointInTime {
     }
 }
 
+struct Model {
+    points: Vec<PointInTime>,
+}
+
 fn main() {
     set_logger(&Logger {}).unwrap();
 
@@ -62,35 +66,65 @@ fn main() {
     nannou::app(model).run();
 }
 
-fn model(app: &App) -> Arc<Mutex<Vec<PointInTime>>> {
+fn model(app: &App) -> Arc<Mutex<Model>> {
     app.new_window()
         .title("Arduino Messwerte")
         .view(view)
         .build()
         .unwrap();
 
-    let model = Arc::new(Mutex::new(Vec::new()));
+    let model = Arc::new(Mutex::new(Model { points: Vec::new() }));
     let clone = model.clone();
 
     thread::spawn(move || loop {
-        clone.lock().unwrap().push(PointInTime::new(read_value()));
+        clone
+            .lock()
+            .unwrap()
+            .points
+            .push(PointInTime::new(read_value()));
     });
 
     model
 }
 
-fn view(app: &App, data: &Arc<Mutex<Vec<PointInTime>>>, frame: Frame) {
-    frame.clear(BLACK);
-    let window = app.window_rect();
-    let draw = app.draw();
+fn draw_line(
+    draw: &Draw,
+    index: f32,
+    point_width: f32,
+    point: &PointInTime,
+    points: &[PointInTime],
+) -> Option<()> {
+    let next_index = index + 1.;
+    let this_point = pt2(index * point_width, point.y as f32);
+    let next_point = pt2(
+        next_index as f32 * point_width,
+        points.get(next_index as usize)?.y as f32,
+    );
 
     draw.line()
-        .start(window.bottom_left())
-        .end(window.top_right())
+        .start(this_point)
+        .end(next_point)
         .color(BLUEVIOLET)
         .weight(4.);
 
-    draw.text("Linie. Toll.")
+    Some(())
+}
+
+fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
+    let lock = data.lock().unwrap();
+    frame.clear(BLACK);
+    let window = app.window_rect();
+    let draw = app.draw();
+    let width = window.w();
+
+    let points = lock.points.len() as f32;
+    let point_width = width / points;
+
+    for (index, point) in lock.points.iter().enumerate().map(|(i, x)| (i as f32, x)) {
+        draw_line(&draw, index, point_width, point, &lock.points);
+    }
+
+    draw.text("X-Achse")
         .color(BLUEVIOLET)
         .xy(window.mid_bottom() + pt2(0., 50.))
         .font_size(32);
