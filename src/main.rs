@@ -81,14 +81,21 @@ fn model(app: &App) -> Arc<Mutex<Vec<PointInTime>>> {
 
 fn view(app: &App, data: &Arc<Mutex<Vec<PointInTime>>>, frame: Frame) {
     frame.clear(BLACK);
-    // let window = app.window_rect();
-    //
-    // app.draw()
-    //     .line()
-    //     .start(window.bottom_left())
-    //     .end(window.top_right())
-    //     .color(BLUEVIOLET)
-    //     .weight(4.);
+    let window = app.window_rect();
+    let draw = app.draw();
+
+    draw.line()
+        .start(window.bottom_left())
+        .end(window.top_right())
+        .color(BLUEVIOLET)
+        .weight(4.);
+
+    draw.text("Linie. Toll.")
+        .color(BLUEVIOLET)
+        .xy(window.mid_bottom() + pt2(0., 50.))
+        .font_size(32);
+
+    draw.to_frame(app, &frame).unwrap();
 }
 
 fn read_value() -> u32 {
