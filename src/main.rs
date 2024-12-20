@@ -5,7 +5,34 @@ use std::{
     time::{Duration, Instant},
 };
 
+use colored::Colorize;
+use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{prelude::*, App, Frame};
+
+pub struct Logger {}
+
+impl Log for Logger {
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            println!(
+                "{}",
+                match record.level() {
+                    Level::Error => format!("[ERROR] {}", record.args()).red(),
+                    Level::Warn => format!("[WARN ] {}", record.args()).yellow(),
+                    Level::Info => format!("[INFO ] {}", record.args()).cyan(),
+                    Level::Debug => format!("[DEBUG] {}", record.args()).green(),
+                    Level::Trace => format!("[TRACE] {}", record.args()).black(),
+                }
+            );
+        }
+    }
+
+    fn flush(&self) {}
+}
 
 static START: Mutex<OnceCell<Instant>> = Mutex::new(OnceCell::new());
 
@@ -24,6 +51,14 @@ impl PointInTime {
 }
 
 fn main() {
+    set_logger(&Logger {}).unwrap();
+
+    #[cfg(debug_assertions)]
+    set_max_level(LevelFilter::Debug);
+
+    #[cfg(not(debug_assertions))]
+    set_max_level(LevelFilter::Warn);
+
     nannou::app(model).run();
 }
 
@@ -46,6 +81,14 @@ fn model(app: &App) -> Arc<Mutex<Vec<PointInTime>>> {
 
 fn view(app: &App, data: &Arc<Mutex<Vec<PointInTime>>>, frame: Frame) {
     frame.clear(BLACK);
+    // let window = app.window_rect();
+    //
+    // app.draw()
+    //     .line()
+    //     .start(window.bottom_left())
+    //     .end(window.top_right())
+    //     .color(BLUEVIOLET)
+    //     .weight(4.);
 }
 
 fn read_value() -> u32 {
