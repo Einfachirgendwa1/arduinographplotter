@@ -144,8 +144,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let point_height = height / diff;
     let point_width = width / MAX_POINT_AMOUNT as f32;
 
-    dbg!(diff, height, point_height);
-
     // X-Achse
     draw.line()
         .start(point2(left, bottom))
