@@ -10,7 +10,7 @@ use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
 const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
-const MAX_POINT_AMOUNT: usize = 30;
+const MAX_POINT_AMOUNT: usize = 1000;
 
 struct PaddingRect {
     top: f32,
@@ -78,7 +78,7 @@ fn main() {
     set_max_level(LevelFilter::Debug);
 
     #[cfg(not(debug_assertions))]
-    set_max_level(LevelFilter::Warn);
+    set_max_level(LevelFilter::Error);
 
     nannou::app(model).run();
 }
@@ -168,6 +168,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 }
 
 fn read_value() -> i32 {
-    sleep(Duration::from_millis(100));
+    sleep(Duration::from_millis(3));
     random_range(0, 1000)
 }
