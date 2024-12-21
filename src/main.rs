@@ -7,13 +7,15 @@ use std::{
 
 use colored::Colorize;
 use log::{set_logger, set_max_level, Level, LevelFilter, Log};
-use nannou::{prelude::*, App, Frame};
+use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
 macro_rules! attempt {
     {$($code:tt)*} => {
         (|| { $($code)* })()
     };
 }
+
+const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
 
 pub struct Logger {}
 
@@ -109,11 +111,16 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
         return;
     }
 
-    let point_width = window.w() as usize / point_count;
+    let width = window.w() as usize;
+    let point_width = width * 2 / point_count;
+    let offset_down = window.h() as i32 / 2 - 100;
 
     for index in 0..point_count {
         let get_point = |index: usize| -> Option<Point2> {
-            Some(point2(index * point_width, lock.points.get(index)?.y))
+            Some(point2(
+                (index * point_width) as i32 - width as i32,
+                lock.points.get(index)?.y as i32 - offset_down,
+            ))
         };
 
         attempt! {
@@ -125,7 +132,7 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
             draw.line()
                 .start(start)
                 .end(end)
-                .color(BLUEVIOLET)
+                .color(COLOR)
                 .weight(4.);
 
             Some(())
@@ -133,7 +140,7 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     }
 
     draw.text("X-Achse")
-        .color(BLUEVIOLET)
+        .color(COLOR)
         .xy(window.mid_bottom() + pt2(0., 50.))
         .font_size(32);
 
@@ -141,6 +148,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 }
 
 fn read_value() -> u32 {
-    sleep(Duration::from_millis(1000));
-    random_range(0, 100)
+    sleep(Duration::from_millis(100));
+    random_range(0, 1000)
 }
