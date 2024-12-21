@@ -10,7 +10,7 @@ use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
 const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
-const MAX_POINT_AMOUNT: usize = 1000;
+const MAX_POINT_AMOUNT: usize = 100;
 
 struct PaddingRect {
     top: f32,
@@ -136,7 +136,15 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let width = right - left;
     let height = top - bottom;
 
+    let max_height = points.iter().map(|point| point.y).max().unwrap();
+    let min_height = points.iter().map(|point| point.y).min().unwrap();
+
+    let diff = (max_height - min_height) as f32;
+
+    let point_height = height / diff;
     let point_width = width / MAX_POINT_AMOUNT as f32;
+
+    dbg!(diff, height, point_height);
 
     // X-Achse
     draw.line()
@@ -151,13 +159,14 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
         .color(COLOR);
 
     // Graph
-    draw.polyline().weight(3.).color(COLOR).points(
-        points
-            .iter()
-            .enumerate()
-            .map(|(index, x)| (index as f32 * point_width, x))
-            .map(|(left_offset, point)| (left + left_offset, bottom + point.y as f32)),
-    );
+    draw.polyline()
+        .weight(3.)
+        .color(COLOR)
+        .points(points.iter().enumerate().map(|(index, point)| {
+            let x = left + index as f32 * point_width;
+            let y = bottom + (point.y - min_height) as f32 * point_height;
+            (x, y)
+        }));
 
     draw.text("X-Achse")
         .color(COLOR)
@@ -168,6 +177,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 }
 
 fn read_value() -> i32 {
-    sleep(Duration::from_millis(3));
+    sleep(Duration::from_millis(40));
     random_range(0, 1000)
 }
