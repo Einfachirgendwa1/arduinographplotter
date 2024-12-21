@@ -9,12 +9,6 @@ use colored::Colorize;
 use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
-macro_rules! attempt {
-    {$($code:tt)*} => {
-        (|| { $($code)* })()
-    };
-}
-
 const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
 
 pub struct Logger {}
@@ -46,11 +40,11 @@ static START: Mutex<OnceCell<Instant>> = Mutex::new(OnceCell::new());
 
 struct PointInTime {
     x: Duration,
-    y: u32,
+    y: i32,
 }
 
 impl PointInTime {
-    fn new(value: u32) -> Self {
+    fn new(value: i32) -> Self {
         Self {
             x: Instant::now().duration_since(*START.lock().unwrap().get_or_init(Instant::now)),
             y: value,
@@ -106,38 +100,21 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let window = app.window_rect();
     let draw = app.draw();
 
-    let point_count = lock.points.len();
+    let point_count = lock.points.len() as i32;
     if point_count == 0 {
         return;
     }
 
-    let width = window.w() as usize;
+    let width = window.w() as i32;
     let point_width = width * 2 / point_count;
     let offset_down = window.h() as i32 / 2 - 100;
 
-    for index in 0..point_count {
-        let get_point = |index: usize| -> Option<Point2> {
-            Some(point2(
-                (index * point_width) as i32 - width as i32,
-                lock.points.get(index)?.y as i32 - offset_down,
-            ))
-        };
+    let points =
+        lock.points.iter().enumerate().map(|(index, point)| {
+            point2((index as i32 * point_width) - width, point.y - offset_down)
+        });
 
-        attempt! {
-            let start = get_point(index)?;
-            let end = get_point(index + 1)?;
-
-            println!("Drawing line from {start} to {end}");
-
-            draw.line()
-                .start(start)
-                .end(end)
-                .color(COLOR)
-                .weight(4.);
-
-            Some(())
-        };
-    }
+    draw.polyline().weight(3.).color(COLOR).points(points);
 
     draw.text("X-Achse")
         .color(COLOR)
@@ -147,7 +124,7 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     draw.to_frame(app, &frame).unwrap();
 }
 
-fn read_value() -> u32 {
+fn read_value() -> i32 {
     sleep(Duration::from_millis(100));
     random_range(0, 1000)
 }
