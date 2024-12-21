@@ -10,6 +10,21 @@ use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
 const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
+const MAX_POINT_AMOUNT: usize = 30;
+
+struct PaddingRect {
+    top: f32,
+    bottom: f32,
+    left: f32,
+    right: f32,
+}
+
+const PADDING_RECT: PaddingRect = PaddingRect {
+    top: 50.,
+    bottom: 50.,
+    left: 50.,
+    right: 50.,
+};
 
 pub struct Logger {}
 
@@ -96,30 +111,58 @@ where
 
 fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let lock = data.lock().unwrap();
+
     frame.clear(BLACK);
+
     let window = app.window_rect();
     let draw = app.draw();
 
-    let point_count = lock.points.len() as i32;
-    if point_count == 0 {
-        return;
+    let mut points = &lock.points[..];
+
+    match points.len() {
+        0 => return,
+        x if x > MAX_POINT_AMOUNT => {
+            let lowest = x as usize - MAX_POINT_AMOUNT;
+            points = &lock.points[lowest..(x - 1) as usize];
+        }
+        _ => {}
     }
 
-    let width = window.w() as i32;
-    let point_width = width * 2 / point_count;
-    let offset_down = window.h() as i32 / 2 - 100;
+    let top = window.top() - PADDING_RECT.top;
+    let bottom = window.bottom() + PADDING_RECT.bottom;
+    let right = window.right() - PADDING_RECT.right;
+    let left = window.left() + PADDING_RECT.left;
 
-    let points =
-        lock.points.iter().enumerate().map(|(index, point)| {
-            point2((index as i32 * point_width) - width, point.y - offset_down)
-        });
+    let width = right - left;
+    let height = top - bottom;
 
-    draw.polyline().weight(3.).color(COLOR).points(points);
+    let point_width = width / MAX_POINT_AMOUNT as f32;
+
+    // X-Achse
+    draw.line()
+        .start(point2(left, bottom))
+        .end(point2(right, bottom))
+        .color(COLOR);
+
+    // Y-Achse
+    draw.line()
+        .start(point2(left, bottom))
+        .end(point2(left, top))
+        .color(COLOR);
+
+    // Graph
+    draw.polyline().weight(3.).color(COLOR).points(
+        points
+            .iter()
+            .enumerate()
+            .map(|(index, x)| (index as f32 * point_width, x))
+            .map(|(left_offset, point)| (left + left_offset, bottom + point.y as f32)),
+    );
 
     draw.text("X-Achse")
         .color(COLOR)
-        .xy(window.mid_bottom() + pt2(0., 50.))
-        .font_size(32);
+        .xy(point2(0, bottom - 20.))
+        .font_size(20);
 
     draw.to_frame(app, &frame).unwrap();
 }
