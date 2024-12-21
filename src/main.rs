@@ -1,7 +1,7 @@
 use std::{
     cell::OnceCell,
     sync::{Arc, Mutex},
-    thread,
+    thread::{self, sleep},
     time::{Duration, Instant},
 };
 
@@ -77,11 +77,8 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
     let clone = model.clone();
 
     thread::spawn(move || loop {
-        clone
-            .lock()
-            .unwrap()
-            .points
-            .push(PointInTime::new(read_value()));
+        let point = PointInTime::new(read_value());
+        clone.lock().unwrap().points.push(point);
     });
 
     model
@@ -133,5 +130,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 }
 
 fn read_value() -> u32 {
+    sleep(Duration::from_millis(100));
     0
 }
