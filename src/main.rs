@@ -9,9 +9,10 @@ use colored::Colorize;
 use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
-const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
-const MAX_POINT_AMOUNT: usize = 100;
-const RANDOM_POINT_DELAY: Duration = Duration::from_secs(1);
+const COLOR: rgb::Rgb<Srgb, u8> = GRAY;
+
+const MAX_POINT_AMOUNT: usize = 1000;
+const RANDOM_POINT_DELAY: Duration = Duration::from_millis(10);
 
 struct PaddingRect {
     top: f32,
@@ -175,6 +176,16 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
         .color(COLOR)
         .xy(point2(0, bottom - 20.))
         .font_size(20);
+
+    let pps = 1. / RANDOM_POINT_DELAY.as_secs_f64();
+
+    draw.text(&format!(
+        "Random Punkte, {MAX_POINT_AMOUNT} werden auf einmal angezeigt, {pps} Punkt(e) / Sekunde",
+    ))
+    .color(COLOR)
+    .xy(point2(0, top + 20.))
+    .width(10000.)
+    .font_size(20);
 
     draw.to_frame(app, &frame).unwrap();
 }
