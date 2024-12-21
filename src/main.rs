@@ -9,6 +9,12 @@ use colored::Colorize;
 use log::{set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{prelude::*, App, Frame};
 
+macro_rules! attempt {
+    {$($code:tt)*} => {
+        (|| { $($code)* })()
+    };
+}
+
 pub struct Logger {}
 
 impl Log for Logger {
@@ -84,30 +90,12 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
     model
 }
 
-// FIXME: Kein f32 as usize als Indexing
-// FIXME: Ich mag allgemein die Verwendung von floats hier nicht
-// TODO: Ausserdem ist das eigentlich ein try block
-fn draw_line(
-    draw: &Draw,
-    index: f32,
-    point_width: f32,
-    point: &PointInTime,
-    points: &[PointInTime],
-) -> Option<()> {
-    let next_index = index + 1.;
-    let this_point = pt2(index * point_width, point.y as f32);
-    let next_point = pt2(
-        next_index * point_width,
-        points.get(next_index as usize)?.y as f32,
-    );
-
-    draw.line()
-        .start(this_point)
-        .end(next_point)
-        .color(BLUEVIOLET)
-        .weight(4.);
-
-    Some(())
+fn point2<A, B>(a: A, b: B) -> Point2
+where
+    A: AsPrimitive<f32>,
+    B: AsPrimitive<f32>,
+{
+    pt2(a.as_(), b.as_())
 }
 
 fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
@@ -115,13 +103,33 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     frame.clear(BLACK);
     let window = app.window_rect();
     let draw = app.draw();
-    let width = window.w();
 
-    let points = lock.points.len() as f32;
-    let point_width = width / points;
+    let point_count = lock.points.len();
+    if point_count == 0 {
+        return;
+    }
 
-    for (index, point) in lock.points.iter().enumerate().map(|(i, x)| (i as f32, x)) {
-        draw_line(&draw, index, point_width, point, &lock.points);
+    let point_width = window.w() as usize / point_count;
+
+    for index in 0..point_count {
+        let get_point = |index: usize| -> Option<Point2> {
+            Some(point2(index * point_width, lock.points.get(index)?.y))
+        };
+
+        attempt! {
+            let start = get_point(index)?;
+            let end = get_point(index + 1)?;
+
+            println!("Drawing line from {start} to {end}");
+
+            draw.line()
+                .start(start)
+                .end(end)
+                .color(BLUEVIOLET)
+                .weight(4.);
+
+            Some(())
+        };
     }
 
     draw.text("X-Achse")
@@ -134,5 +142,5 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 
 fn read_value() -> u32 {
     sleep(Duration::from_millis(1000));
-    0
+    random_range(0, 100)
 }

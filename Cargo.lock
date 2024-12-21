@@ -9,7 +9,9 @@ dependencies = [
  "colored",
  "log",
  "nannou",
+ "num-traits",
  "once_cell",
+ "rand 0.8.5",
 ]
 
 [[package]]
