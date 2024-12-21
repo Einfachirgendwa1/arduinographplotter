@@ -84,6 +84,9 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
     model
 }
 
+// FIXME: Kein f32 as usize als Indexing
+// FIXME: Ich mag allgemein die Verwendung von floats hier nicht
+// TODO: Ausserdem ist das eigentlich ein try block
 fn draw_line(
     draw: &Draw,
     index: f32,
@@ -94,7 +97,7 @@ fn draw_line(
     let next_index = index + 1.;
     let this_point = pt2(index * point_width, point.y as f32);
     let next_point = pt2(
-        next_index as f32 * point_width,
+        next_index * point_width,
         points.get(next_index as usize)?.y as f32,
     );
 
@@ -130,6 +133,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 }
 
 fn read_value() -> u32 {
-    sleep(Duration::from_millis(100));
+    sleep(Duration::from_millis(1000));
     0
 }
