@@ -11,6 +11,7 @@ use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 
 const COLOR: rgb::Rgb<Srgb, u8> = WHITE;
 const MAX_POINT_AMOUNT: usize = 100;
+const RANDOM_POINT_DELAY: Duration = Duration::from_secs(1);
 
 struct PaddingRect {
     top: f32,
@@ -139,7 +140,11 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let max_height = points.iter().map(|point| point.y).max().unwrap();
     let min_height = points.iter().map(|point| point.y).min().unwrap();
 
-    let diff = (max_height - min_height) as f32;
+    let mut diff = (max_height - min_height) as f32;
+
+    if diff == 0. {
+        diff = 2.;
+    }
 
     let point_height = height / diff;
     let point_width = width / MAX_POINT_AMOUNT as f32;
@@ -175,6 +180,6 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 }
 
 fn read_value() -> i32 {
-    sleep(Duration::from_millis(40));
-    random_range(0, 1000)
+    sleep(RANDOM_POINT_DELAY);
+    random_range(1, 1000)
 }
