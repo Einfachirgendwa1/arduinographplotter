@@ -1,18 +1,31 @@
 use std::{
     cell::OnceCell,
+    io::{BufRead, BufReader},
     sync::{Arc, Mutex},
-    thread::{self, sleep},
+    thread,
     time::{Duration, Instant},
 };
 
+use clap::Parser;
 use colored::Colorize;
-use log::{set_logger, set_max_level, Level, LevelFilter, Log};
+use log::{error, set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
+use serialport::SerialPort;
 
 const COLOR: rgb::Rgb<Srgb, u8> = GRAY;
 
-const MAX_POINT_AMOUNT: usize = 1000;
-const RANDOM_POINT_DELAY: Duration = Duration::from_millis(10);
+const MAX_POINT_AMOUNT: usize = 100;
+
+#[derive(Parser)]
+struct Cli {
+    #[cfg(unix)]
+    /// Path to the arduino (/dev/...). Defaults to /dev/ttyACM0
+    arduino: Option<String>,
+
+    #[cfg(windows)]
+    /// Port of the arduino (COM<some number>)
+    arduino: String,
+}
 
 struct PaddingRect {
     top: f32,
@@ -86,6 +99,18 @@ fn main() {
 }
 
 fn model(app: &App) -> Arc<Mutex<Model>> {
+    let Cli { arduino } = Cli::parse();
+
+    #[cfg(unix)]
+    let arduino = arduino.unwrap_or("/dev/ttyACM0".to_string());
+
+    let port = serialport::new(arduino.clone(), 9600)
+        .timeout(Duration::from_secs(10))
+        .open()
+        .expect(&format!("Konnte den Port {arduino} nicht öffnen"));
+
+    let mut reader = BufReader::new(port);
+
     app.new_window()
         .title("Arduino Messwerte")
         .view(view)
@@ -96,7 +121,7 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
     let clone = model.clone();
 
     thread::spawn(move || loop {
-        let point = PointInTime::new(read_value());
+        let point = PointInTime::new(read_value(&mut reader));
         clone.lock().unwrap().points.push(point);
     });
 
@@ -177,20 +202,28 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
         .xy(point2(0, bottom - 20.))
         .font_size(20);
 
-    let pps = 1. / RANDOM_POINT_DELAY.as_secs_f64();
-
-    draw.text(&format!(
-        "Random Punkte, {MAX_POINT_AMOUNT} werden auf einmal angezeigt, {pps} Punkt(e) / Sekunde",
-    ))
-    .color(COLOR)
-    .xy(point2(0, top + 20.))
-    .width(10000.)
-    .font_size(20);
-
     draw.to_frame(app, &frame).unwrap();
 }
 
-fn read_value() -> i32 {
-    sleep(RANDOM_POINT_DELAY);
-    random_range(1, 1000)
+fn read_value(reader: &mut BufReader<Box<dyn SerialPort>>) -> i32 {
+    let mut buf = String::new();
+    if let Err(err) = reader.read_line(&mut buf) {
+        error!("Fehler beim Lesen vom arduino: {err}");
+        return read_value(reader);
+    }
+    let buf = buf.trim();
+
+    if buf.is_empty() {
+        return read_value(reader);
+    }
+
+    match buf.parse() {
+        Ok(value) => value,
+        Err(err) => {
+            error!(
+                "Invaliden input vom arduino empfangen, ignoriere.\nInput: {buf}, Fehler: {err}"
+            );
+            read_value(reader)
+        }
+    }
 }
