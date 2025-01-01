@@ -114,6 +114,8 @@ fn main() {
     #[cfg(debug_assertions)]
     set_max_level(LevelFilter::Debug);
 
+    START.lock().unwrap().set(Instant::now()).unwrap();
+
     #[cfg(not(debug_assertions))]
     set_max_level(LevelFilter::Error);
 
@@ -216,11 +218,7 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 
     let label_pos_diff = width / (X_LABEL_COUNT - 1) as f32;
 
-    let mut time = START
-        .lock()
-        .unwrap()
-        .get_or_init(Instant::now)
-        .duration_since(start_time);
+    let mut time = start_time.duration_since(*START.lock().unwrap().get().unwrap());
 
     let mut pos = left;
     for _ in 0..X_LABEL_COUNT {
