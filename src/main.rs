@@ -1,6 +1,7 @@
 use std::{
     cell::OnceCell,
     io::{BufRead, BufReader},
+    marker::PhantomData,
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -12,7 +13,26 @@ use log::{error, set_logger, set_max_level, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 use serialport::SerialPort;
 
-const COLOR: rgb::Rgb<Srgb, u8> = GRAY;
+type NannouColor = rgb::Rgb<Srgb, u8>;
+
+const fn rgb(red: u8, green: u8, blue: u8) -> NannouColor {
+    NannouColor {
+        red,
+        green,
+        blue,
+        standard: PhantomData,
+    }
+}
+
+const GRAPH_COLOR: NannouColor = rgb(243, 139, 168);
+const AXIS_COLOR: NannouColor = rgb(203, 166, 247);
+const TEXT_COLOR: NannouColor = rgb(205, 214, 244);
+const BACKGROUND_COLOR: NannouColor = rgb(30, 30, 46);
+
+const X_LABEL_COUNT: u32 = 3;
+const Y_LABEL_COUNT: u32 = 3;
+
+const X_LABEL_Y: f32 = 10.;
 
 const MAX_POINT_AMOUNT: usize = 100;
 
@@ -69,14 +89,14 @@ impl Log for Logger {
 static START: Mutex<OnceCell<Instant>> = Mutex::new(OnceCell::new());
 
 struct PointInTime {
-    x: Duration,
+    x: Instant,
     y: i32,
 }
 
 impl PointInTime {
     fn new(value: i32) -> Self {
         Self {
-            x: Instant::now().duration_since(*START.lock().unwrap().get_or_init(Instant::now)),
+            x: Instant::now(),
             y: value,
         }
     }
@@ -84,6 +104,8 @@ impl PointInTime {
 
 struct Model {
     points: Vec<PointInTime>,
+    top_y: f32,
+    btm_y: f32,
 }
 
 fn main() {
@@ -117,7 +139,11 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
         .build()
         .unwrap();
 
-    let model = Arc::new(Mutex::new(Model { points: Vec::new() }));
+    let model = Arc::new(Mutex::new(Model {
+        points: Vec::new(),
+        btm_y: 0.,
+        top_y: 0.,
+    }));
     let clone = model.clone();
 
     thread::spawn(move || loop {
@@ -136,10 +162,14 @@ where
     pt2(a.as_(), b.as_())
 }
 
-fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
-    let lock = data.lock().unwrap();
+fn step(base: f32, target: f32) -> f32 {
+    base.clone() + (target - base) * 0.07
+}
 
-    frame.clear(BLACK);
+fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
+    let mut lock = data.lock().unwrap();
+
+    frame.clear(BACKGROUND_COLOR);
 
     let window = app.window_rect();
     let draw = app.draw();
@@ -163,10 +193,13 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let width = right - left;
     let height = top - bottom;
 
-    let max_height = points.iter().map(|point| point.y).max().unwrap();
-    let min_height = points.iter().map(|point| point.y).min().unwrap();
+    let target_top_y = points.iter().map(|point| point.y).max().unwrap() as f32 + 10.;
+    let target_btm_y = points.iter().map(|point| point.y).min().unwrap() as f32 - 10.;
 
-    let mut diff = (max_height - min_height) as f32;
+    let top_y = step(lock.top_y, target_top_y);
+    let btm_y = step(lock.btm_y, target_btm_y);
+
+    let mut diff = (top_y - btm_y) as f32;
 
     if diff == 0. {
         diff = 2.;
@@ -175,34 +208,59 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let point_height = height / diff;
     let point_width = width / MAX_POINT_AMOUNT as f32;
 
-    // X-Achse
-    draw.line()
-        .start(point2(left, bottom))
-        .end(point2(right, bottom))
-        .color(COLOR);
+    let start_time = points.first().unwrap().x;
+    let end_time = points.last().unwrap().x;
 
-    // Y-Achse
-    draw.line()
-        .start(point2(left, bottom))
-        .end(point2(left, top))
-        .color(COLOR);
+    let duration = end_time.duration_since(start_time);
+    let label_time_diff = duration / X_LABEL_COUNT;
+
+    let label_pos_diff = width / (X_LABEL_COUNT - 1) as f32;
+
+    let mut time = START
+        .lock()
+        .unwrap()
+        .get_or_init(Instant::now)
+        .duration_since(start_time);
+
+    let mut pos = left;
+    for _ in 0..X_LABEL_COUNT {
+        draw.text(&format!("{time:?}"))
+            .xy(point2(pos, bottom + X_LABEL_Y))
+            .color(TEXT_COLOR);
+
+        time += label_time_diff;
+        pos += label_pos_diff;
+    }
+
+    // Achsen
+    draw.polyline()
+        .weight(6.)
+        .points([
+            point2(left, top),
+            point2(left, bottom),
+            point2(right, bottom),
+        ])
+        .color(AXIS_COLOR);
 
     // Graph
     draw.polyline()
         .weight(3.)
-        .color(COLOR)
+        .color(GRAPH_COLOR)
         .points(points.iter().enumerate().map(|(index, point)| {
             let x = left + index as f32 * point_width;
-            let y = bottom + (point.y - min_height) as f32 * point_height;
+            let y = bottom + (point.y as f32 - btm_y) * point_height;
             (x, y)
         }));
 
     draw.text("X-Achse")
-        .color(COLOR)
+        .color(TEXT_COLOR)
         .xy(point2(0, bottom - 20.))
         .font_size(20);
 
     draw.to_frame(app, &frame).unwrap();
+
+    lock.top_y = top_y as f32;
+    lock.btm_y = btm_y as f32;
 }
 
 fn read_value(reader: &mut BufReader<Box<dyn SerialPort>>) -> i32 {
