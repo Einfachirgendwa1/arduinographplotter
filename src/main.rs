@@ -2,14 +2,15 @@ use std::{
     cell::OnceCell,
     io::{BufRead, BufReader},
     marker::PhantomData,
+    process::exit,
     sync::{Arc, Mutex},
-    thread,
+    thread::{self, sleep},
     time::{Duration, Instant},
 };
 
 use clap::Parser;
 use colored::Colorize;
-use log::{error, set_logger, set_max_level, Level, LevelFilter, Log};
+use log::{error, set_logger, set_max_level, warn, Level, LevelFilter, Log};
 use nannou::{color::encoding::Srgb, prelude::*, App, Frame};
 use serialport::SerialPort;
 
@@ -36,7 +37,7 @@ const X_LABEL_Y: f32 = 10.;
 
 const MAX_POINT_AMOUNT: usize = 100;
 
-#[derive(Parser)]
+#[derive(Debug, Parser, Clone)]
 struct Cli {
     #[cfg(unix)]
     /// Path to the arduino (/dev/...). Defaults to /dev/ttyACM0
@@ -87,6 +88,7 @@ impl Log for Logger {
 }
 
 static START: Mutex<OnceCell<Instant>> = Mutex::new(OnceCell::new());
+static CLI: Mutex<OnceCell<Cli>> = Mutex::new(OnceCell::new());
 
 struct PointInTime {
     x: Instant,
@@ -109,6 +111,8 @@ struct Model {
 }
 
 fn main() {
+    CLI.lock().unwrap().set(Cli::parse()).unwrap();
+
     set_logger(&Logger {}).unwrap();
 
     #[cfg(debug_assertions)]
@@ -123,17 +127,30 @@ fn main() {
 }
 
 fn model(app: &App) -> Arc<Mutex<Model>> {
-    let Cli { arduino } = Cli::parse();
+    let lock = CLI.lock().unwrap();
+    let Cli { arduino } = lock.get().unwrap().clone();
 
     #[cfg(unix)]
     let arduino = arduino.unwrap_or("/dev/ttyACM0".to_string());
 
-    let port = serialport::new(arduino.clone(), 9600)
+    let serialport = serialport::new(arduino.clone(), 9600)
         .timeout(Duration::from_secs(10))
-        .open()
-        .unwrap_or_else(|_| panic!("Konnte den Port {arduino} nicht öffnen"));
+        .open();
 
-    let mut reader = BufReader::new(port);
+    let mut read_fn = match serialport {
+        Ok(port) => get_value_from_arduino(BufReader::new(port)),
+        Err(err) => {
+            error!("Konnte den Port {arduino} nicht öffnen: {err}");
+
+            match cfg!(debug_assertions) {
+                false => exit(1),
+                true => {
+                    warn!("Benutze zufällige Werte stattdessen.");
+                    random_values()
+                }
+            }
+        }
+    };
 
     app.new_window()
         .title("Arduino Messwerte")
@@ -149,11 +166,49 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
     let clone = model.clone();
 
     thread::spawn(move || loop {
-        let point = PointInTime::new(read_value(&mut reader));
-        clone.lock().unwrap().points.push(point);
+        let value = read_fn();
+        clone.lock().unwrap().points.push(PointInTime::new(value));
     });
 
     model
+}
+
+fn get_value_from_arduino(
+    mut reader: BufReader<Box<dyn SerialPort>>,
+) -> Box<dyn FnMut() -> i32 + Send> {
+    let fun = move || loop {
+        let mut buf = String::new();
+        if let Err(err) = reader.read_line(&mut buf) {
+            error!("Fehler beim Lesen vom arduino: {err}");
+            continue;
+        }
+        let buf = buf.trim();
+
+        if buf.is_empty() {
+            continue;
+        }
+
+        match buf.parse() {
+            Ok(value) => break value,
+            Err(err) => {
+                error!(
+                "Invaliden input vom arduino empfangen, ignoriere.\nInput: {buf}, Fehler: {err}"
+            );
+                continue;
+            }
+        }
+    };
+    Box::new(fun)
+}
+
+fn random_values() -> Box<dyn FnMut() -> i32 + Send> {
+    let mut x = 0;
+    let fun = move || {
+        sleep(Duration::from_millis(20));
+        x += random_range(-2, 3);
+        x
+    };
+    Box::new(fun)
 }
 
 fn point2<A, B>(a: A, b: B) -> Point2
@@ -259,27 +314,4 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 
     lock.top_y = top_y;
     lock.btm_y = btm_y;
-}
-
-fn read_value(reader: &mut BufReader<Box<dyn SerialPort>>) -> i32 {
-    let mut buf = String::new();
-    if let Err(err) = reader.read_line(&mut buf) {
-        error!("Fehler beim Lesen vom arduino: {err}");
-        return read_value(reader);
-    }
-    let buf = buf.trim();
-
-    if buf.is_empty() {
-        return read_value(reader);
-    }
-
-    match buf.parse() {
-        Ok(value) => value,
-        Err(err) => {
-            error!(
-                "Invaliden input vom arduino empfangen, ignoriere.\nInput: {buf}, Fehler: {err}"
-            );
-            read_value(reader)
-        }
-    }
 }
