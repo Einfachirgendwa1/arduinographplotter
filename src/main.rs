@@ -131,7 +131,7 @@ fn model(app: &App) -> Arc<Mutex<Model>> {
     let port = serialport::new(arduino.clone(), 9600)
         .timeout(Duration::from_secs(10))
         .open()
-        .expect(&format!("Konnte den Port {arduino} nicht öffnen"));
+        .unwrap_or_else(|_| panic!("Konnte den Port {arduino} nicht öffnen"));
 
     let mut reader = BufReader::new(port);
 
@@ -165,7 +165,7 @@ where
 }
 
 fn step(base: f32, target: f32) -> f32 {
-    base.clone() + (target - base) * 0.07
+    base + (target - base) * 0.07
 }
 
 fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
@@ -181,8 +181,8 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     match points.len() {
         0 => return,
         x if x > MAX_POINT_AMOUNT => {
-            let lowest = x as usize - MAX_POINT_AMOUNT;
-            points = &lock.points[lowest..(x - 1) as usize];
+            let lowest = x - MAX_POINT_AMOUNT;
+            points = &lock.points[lowest..(x - 1)];
         }
         _ => {}
     }
@@ -201,7 +201,7 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
     let top_y = step(lock.top_y, target_top_y);
     let btm_y = step(lock.btm_y, target_btm_y);
 
-    let mut diff = (top_y - btm_y) as f32;
+    let mut diff = top_y - btm_y;
 
     if diff == 0. {
         diff = 2.;
@@ -257,8 +257,8 @@ fn view(app: &App, data: &Arc<Mutex<Model>>, frame: Frame) {
 
     draw.to_frame(app, &frame).unwrap();
 
-    lock.top_y = top_y as f32;
-    lock.btm_y = btm_y as f32;
+    lock.top_y = top_y;
+    lock.btm_y = btm_y;
 }
 
 fn read_value(reader: &mut BufReader<Box<dyn SerialPort>>) -> i32 {
